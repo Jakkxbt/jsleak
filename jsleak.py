@@ -570,12 +570,32 @@ Examples:
     p.add_argument('--version', action='version', version='jsleak 1.0.0')
     return p
 
+def print_banner():
+    """CobraSEC branded banner — matches jwtforge. Shown only for interactive table output
+    so JSON/MD and piped output stay clean."""
+    use = supports_color()
+    g  = ANSI['green'] if use else ''
+    cy = ANSI['cyan'] if use else ''
+    gr = ANSI['gray'] if use else ''
+    b  = ANSI['bold'] if use else ''
+    r  = ANSI['reset'] if use else ''
+    print(
+        f"{g}╾━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╼{r}\n"
+        f"{b}{cy}    J S L E A K{r}   {g}▓▒░ CobraSEC ░▒▓{r}\n"
+        f"{gr}    JS Secret & Endpoint Scanner · Attack to Defend{r}\n"
+        f"{g}╾━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╼{r}"
+    )
+
+
 def main():
     parser = build_argparser()
     args = parser.parse_args()
 
     if args.no_color:
         os.environ['NO_COLOR'] = '1'
+
+    if args.format == 'table' and sys.stdout.isatty():
+        print_banner()
 
     target = args.target.strip()
     sources = []   # list of (source_id, content)
