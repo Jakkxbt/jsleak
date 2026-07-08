@@ -9,6 +9,7 @@ A fast, portable, **single-file** JavaScript secret & endpoint scanner written i
 - Clean table / JSON / Markdown output
 - Optional secret masking
 - Non-zero exit status when secrets are discovered (CI friendly)
+- JSON/Markdown output keeps full values (never truncated) for piping into other tools
 
 ## Installation
 
@@ -53,6 +54,14 @@ python3 jsleak.py <target> [options]
 | Stripe keys             | `sk_live_...`, `pk_live_...`        | HIGH/MED  |
 | Slack Token / Webhook   | `xox...`, hooks.slack.com           | HIGH      |
 | GitHub Token            | `ghp_...`, `gho_...`                | HIGH      |
+| GitHub Fine-grained PAT | `github_pat_...`                    | HIGH      |
+| GitLab PAT              | `glpat-...`                         | HIGH      |
+| OpenAI API Key          | `sk-...`, `sk-proj-...`             | HIGH      |
+| Anthropic API Key       | `sk-ant-...`                        | HIGH      |
+| Slack App-Level Token   | `xapp-...`                          | HIGH      |
+| npm Access Token        | `npm_...`                           | HIGH      |
+| SendGrid API Key        | `SG.xxx.yyy`                        | HIGH      |
+| Twilio Account SID      | `AC...`                             | MEDIUM    |
 | JWT                     | `eyJ...`                            | MEDIUM    |
 | Private Key Block       | `-----BEGIN ... PRIVATE KEY-----`   | CRITICAL  |
 | Firebase URL            | `*.firebaseio.com`                  | MEDIUM    |

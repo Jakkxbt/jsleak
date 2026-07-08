@@ -85,6 +85,54 @@ SECRET_PATTERNS = [
         "minlen": 40,
     },
     {
+        "name": "GitHub Fine-grained PAT",
+        "regex": re.compile(r'\b(github_pat_[0-9A-Za-z_]{60,})\b'),
+        "severity": "HIGH",
+        "minlen": 70,
+    },
+    {
+        "name": "GitLab PAT",
+        "regex": re.compile(r'\b(glpat-[0-9A-Za-z_\-]{20,})\b'),
+        "severity": "HIGH",
+        "minlen": 26,
+    },
+    {
+        "name": "OpenAI API Key",
+        "regex": re.compile(r'\b(sk-(?!ant-)(?:proj-)?[0-9A-Za-z_\-]{20,})\b'),
+        "severity": "HIGH",
+        "minlen": 24,
+    },
+    {
+        "name": "Anthropic API Key",
+        "regex": re.compile(r'\b(sk-ant-[0-9A-Za-z_\-]{20,})\b'),
+        "severity": "HIGH",
+        "minlen": 28,
+    },
+    {
+        "name": "Slack App-Level Token",
+        "regex": re.compile(r'\b(xapp-[0-9]-[0-9A-Za-z_\-]{10,})\b'),
+        "severity": "HIGH",
+        "minlen": 20,
+    },
+    {
+        "name": "npm Access Token",
+        "regex": re.compile(r'\b(npm_[0-9A-Za-z]{36})\b'),
+        "severity": "HIGH",
+        "minlen": 40,
+    },
+    {
+        "name": "SendGrid API Key",
+        "regex": re.compile(r'\b(SG\.[0-9A-Za-z_\-]{22}\.[0-9A-Za-z_\-]{43})\b'),
+        "severity": "HIGH",
+        "minlen": 69,
+    },
+    {
+        "name": "Twilio Account SID",
+        "regex": re.compile(r'\b(AC[0-9a-fA-F]{32})\b'),
+        "severity": "MEDIUM",
+        "minlen": 34,
+    },
+    {
         "name": "JWT",
         "regex": re.compile(r'\b(eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})\b'),
         "severity": "MEDIUM",
@@ -407,13 +455,18 @@ def scan_content(content, source):
 
 # -------------------- Output Formatters --------------------
 
-def prepare_display(findings, mask):
-    """Attach display_value and sort findings."""
+def prepare_display(findings, mask, truncate=True):
+    """Attach display_value and sort findings.
+
+    truncate=True shortens long values for terminal-table width. Machine-readable
+    outputs (JSON, Markdown) pass truncate=False so piped/automated consumers get
+    the full value (a truncated JWT, DB URI or key is useless downstream).
+    """
     out = []
     for f in findings:
         disp = mask_value(f['value'], f['type'], mask) if f['category'] == 'secret' else f['value']
-        # Truncate overly long display for table friendliness
-        if len(disp) > 90:
+        # Truncate overly long display for table friendliness only
+        if truncate and len(disp) > 90:
             disp = disp[:87] + '...'
         nf = dict(f)
         nf['display_value'] = disp
@@ -472,7 +525,7 @@ def print_table(findings, mask):
     print(c(f"\nTotal: {len(prepared)} unique finding(s)", ANSI['gray']))
 
 def print_json(findings, mask):
-    prepared = prepare_display(findings, mask)
+    prepared = prepare_display(findings, mask, truncate=False)
     clean = []
     for f in prepared:
         item = {
@@ -486,7 +539,7 @@ def print_json(findings, mask):
     print(json.dumps(clean, indent=2, sort_keys=False))
 
 def print_md(findings, mask):
-    prepared = prepare_display(findings, mask)
+    prepared = prepare_display(findings, mask, truncate=False)
     if not prepared:
         print("No findings.")
         return
@@ -567,7 +620,7 @@ Examples:
                    help='Mask secret values in the output (recommended for sharing)')
     p.add_argument('--no-color', action='store_true',
                    help='Disable ANSI colors even when stdout is a TTY')
-    p.add_argument('--version', action='version', version='jsleak 1.0.0')
+    p.add_argument('--version', action='version', version='jsleak 1.1.0')
     return p
 
 def print_banner():
