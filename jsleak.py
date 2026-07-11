@@ -254,10 +254,22 @@ def mask_value(value, typ, do_mask):
         prefix = min(7, len(v) - 5)
     return v[:prefix] + ('*' * max(4, len(v) - prefix - 4)) + v[-4:]
 
+# Unambiguous key formats — trusted even if their random body happens to contain
+# a token like 'demo'/'test'/'fake', because the fixed prefix+shape is the signal.
+HIGH_CONF_KEY_RE = re.compile(
+    r'(?:AKIA|ASIA)[A-Z0-9]{16}'        # AWS access key id
+    r'|AIza[0-9A-Za-z_\-]{35}'          # Google API key
+    r'|gh[posru]_[A-Za-z0-9]{36,}'      # GitHub tokens
+    r'|xox[baprs]-[A-Za-z0-9-]{10,}'    # Slack tokens
+)
+
+
 def is_false_positive(val, name):
     """Crude but effective FP filter."""
     if not val:
         return True
+    if HIGH_CONF_KEY_RE.match(val):
+        return False
     v = val.lower()
     fp_tokens = (
         'example', 'sample', 'demo', 'placeholder', 'your_', 'xxx', 'xxxx',
@@ -266,8 +278,10 @@ def is_false_positive(val, name):
     )
     if any(t in v for t in fp_tokens):
         return True
-    # Very short random strings that look generic
-    if len(val) < 16 and name in ('Generic API Secret', 'Password Assignment'):
+    # Very short random strings that look generic. Passwords are excluded — they
+    # are legitimately short (the regex already floors them at 6 chars), so a
+    # <16 threshold here silently dropped real passwords like 'correcthorse'.
+    if len(val) < 16 and name == 'Generic API Secret':
         return True
     return False
 
@@ -428,7 +442,7 @@ def scan_content(content, source):
         bucket = m.group(1) or m.group(2)
         if bucket:
             lineno = content.count('\n', 0, m.start()) + 1
-            loc = get_location(source, lineno, m.start() + 1)
+            loc = get_location(source, lineno, m.start() - content.rfind('\n', 0, m.start()))
             hits.append({
                 'category': 'interesting',
                 'type': 'S3 Bucket',
@@ -441,7 +455,7 @@ def scan_content(content, source):
     for m in GCS_RE.finditer(content):
         lineno = content.count('\n', 0, m.start()) + 1
         val = m.group(0)
-        loc = get_location(source, lineno, m.start() + 1)
+        loc = get_location(source, lineno, m.start() - content.rfind('\n', 0, m.start()))
         hits.append({
             'category': 'interesting',
             'type': 'GCS Bucket',
@@ -654,7 +668,7 @@ def main():
     sources = []   # list of (source_id, content)
 
     if target.startswith(('http://', 'https://')):
-        print(c(f"[*] Fetching {target}", ANSI['blue']))
+        print(c(f"[*] Fetching {target}", ANSI['blue']), file=sys.stderr)
         try:
             content = fetch_url(target)
             sources.append((target, content))
@@ -675,18 +689,18 @@ def main():
         js_files = collect_js_files(target)
         total = len(js_files)
         if total == 0:
-            print(c(f"[!] No .js files found under {target}", ANSI['yellow']))
+            print(c(f"[!] No .js files found under {target}", ANSI['yellow']), file=sys.stderr)
             sys.exit(0)
-        print(c(f"[*] Found {total} JavaScript file(s) — scanning...", ANSI['blue']))
+        print(c(f"[*] Found {total} JavaScript file(s) — scanning...", ANSI['blue']), file=sys.stderr)
         for idx, path in enumerate(js_files, 1):
             rel = os.path.relpath(path, target)
             if total > 3:
-                print(f"\r{c(f'[+] ({idx}/{total}) {rel[:70]}', ANSI['gray'])}", end='', flush=True)
+                print(f"\r{c(f'[+] ({idx}/{total}) {rel[:70]}', ANSI['gray'])}", end='', flush=True, file=sys.stderr)
             content = read_file_safe(path)
             if content:
                 sources.append((path, content))
         if total > 3:
-            print()  # finish progress line
+            print(file=sys.stderr)  # finish progress line
     else:
         print(c(f"[!] Target not found: {target}", ANSI['red']), file=sys.stderr)
         sys.exit(2)
@@ -696,11 +710,13 @@ def main():
     for src, content in sources:
         all_raw.extend(scan_content(content, src))
 
-    # Deduplicate by (category, type, value)
+    # Deduplicate by (category, type, value, location) — keeping location in the
+    # key means the same secret found in two files (or two lines) is reported at
+    # each site instead of collapsing to a single occurrence.
     seen = set()
     deduped = []
     for h in all_raw:
-        key = (h['category'], h['type'], h['value'])
+        key = (h['category'], h['type'], h['value'], h['location'])
         if key not in seen:
             seen.add(key)
             deduped.append(h)
