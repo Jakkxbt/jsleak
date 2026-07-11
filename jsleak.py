@@ -582,7 +582,7 @@ def fetch_url(url):
     )
     with urllib.request.urlopen(req, timeout=20) as resp:
         charset = resp.headers.get_content_charset() or 'utf-8'
-        data = resp.read()
+        data = resp.read(MAX_FILE_SIZE)  # cap remote read like local files (avoid memory blowup)
         try:
             return data.decode(charset, errors='replace')
         except Exception:
